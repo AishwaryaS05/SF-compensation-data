@@ -1,0 +1,653 @@
+---
+title: "Final Project Group 1 BUAN 6365"
+date: "August 1, 2021"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  html_notebook:
+    theme: spacelab
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  html_document:
+    toc: yes
+editor_options:
+  chunk_output_type: inline
+---
+
+# Setup and Packages
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load pacman, warning=FALSE, message=FALSE, results='hide'}
+if(!require("pacman")) install.packages("pacman")
+pacman::p_load(here, knitr, rmarkdown, gplots, GGally, mosaic, scales, mlbench, 
+               data.table, ggplot2, dplyr,ggplot, tidyr,tseries, sandwich, lmtest, 
+               gridExtra, rpivotTable, pivottabler, reshape2,  mapproj,  caret, 
+               ggpubr, forecast, leaps, tidyverse, MASS, esquisse, GGally, gganimate, 
+               scales, corrplot, rattle, e1071, viridis, hrbrthemes, vcd, timeDate, car)
+
+```
+
+# Data 
+
+### 1. Dataset : Exploring the Data
+
+```{r Read CSV file}
+
+Salary_data.df <- read.csv("Employee_Salary_Compensation.csv")
+
+summary(Salary_data.df)
+
+```
+
+### 2. Grouping the Data for later use
+
+```{r Data Grouping}
+# Data Grouping
+Employee.dt <- setDT(Salary_data.df)
+Employee.year.group <- group_by(Salary_data.df, Year, Organization.Group)
+Employee.org.group <- group_by(Salary_data.df, Organization.Group)
+Employee.dept.group <- group_by(Employee.org.group, Department)
+Employee.family.group <- group_by(Employee.dept.group, Job.Family)
+Employee.Job.group <- group_by(Employee.family.group, Job)
+```
+
+### 3. Data Filtering
+
+We are removing "Organization Group Code", "Job Family Code", "Job Code", "Year Type", 
+"Department Code", "Union Code" etc. and other unnecessary columns from the data.
+
+```{r Filter CSV File}
+
+Salary1.df <- Salary_data.df[, -c(1:4,7,9,13)]
+
+Salary1.dt <- setDT(Salary1.df)
+
+str(Salary1.df)
+
+```
+
+### 4. Removing Null Values 
+
+Here, we have removed the null values and removed the category "General City Responsibilities" 
+from Organization Group. We have explained the category removal further in the EDA section.
+
+```{r Removing Null Values}
+
+Salary2.df <- subset(Salary_data.df, 
+                     Organization.Group != "General City Responsibilities" & 
+                       Salaries > 0 & Overtime >= 0 & Other.Salaries >= 0 & 
+                       Total.Salary > 0 & Retirement >= 0 & 
+                       Health.and.Dental >= 0 & Total.Benefits >= 0 & 
+                       Total.Compensation >= 7.25)
+
+str(Salary2.df)
+
+```
+
+
+# Explorartory Data Analysis
+
+### 1. Correlation
+
+Heat Map Representing Various Salaries
+
+```{r HeatMap}
+
+sal.df <- Salary_data.df[,-c(1:13, 17, 21)]
+
+heatmap.2(cor(sal.df), Rowv = FALSE, Colv = FALSE, dendrogram =
+"none",cellnote = round(cor(sal.df),2),notecol = "black", key = FALSE, 
+trace = 'none', margins = c(10,10))
+```
+
+### 2. Univariate data analysis 
+
+Here we are visually exploring each variable to understand the various characteristic and the data spread.
+
+```{r}
+options(scipen=999)
+d_sal <- density(Salary_data.df$Salaries) 
+plot(d_sal) 
+
+d_overtime <- density(Salary_data.df$Overtime, xName='Overtime') 
+plot(d_overtime) 
+
+d_othersal <- density(Salary_data.df$Other.Salaries, xName='Other Salaries') 
+plot(d_othersal) 
+
+d_totsal <- density(Salary_data.df$Total.Salary, xName='Total Salary') 
+plot(d_totsal) 
+
+d_retire <- density(Salary_data.df$Retirement, xName='Retirement') 
+plot(d_retire) 
+
+d_health <- density(Salary_data.df$Health.and.Dental, xName='Health and Dental') 
+plot(d_health) 
+
+d_otherbene <- density(Salary_data.df$Other.Benefits, xName='Other Benefits') 
+plot(d_otherbene) 
+
+d_totbene <- density(Salary_data.df$Total.Benefits, xName='Total Benefits') 
+plot(d_totbene) 
+
+d_totcomp <- density(Salary_data.df$Total.Compensation, xName='Total Compensation') 
+plot(d_totcomp)
+polygon(d_totcomp, col="red", border="blue")
+
+```
+
+
+### 3. Numerical independent variable
+
+Here we are visually exploring the numerical independent variable and how these 
+variables affect the Total Compensation. (Bi-variate analysis)
+
+
+```{r scatter plot of Total.Compensation with salaries, other salaries, retirement, health and dental, other benefits} 
+
+options(scipen=999)
+emp_sal_data.df <- Salary_data.df
+
+ggplot(emp_sal_data.df, aes(x = Salaries, y = log(Total.Compensation))) +
+  geom_point(color = "tomato2", alpha = 0.4)+
+  xlab("Salaries") + 
+  ylab("Total Compensation ($)")
+
+ggplot(emp_sal_data.df, aes(x = Overtime, y = log(Total.Compensation))) +
+  geom_point(color = "tomato2", alpha = 0.4)+
+  xlab("Overtime") + 
+  ylab("Total Compensation ($)")
+
+ggplot(emp_sal_data.df, aes(x = Other.Salaries, y = log(Total.Compensation))) +
+  geom_point(color = "tomato2", alpha = 0.4)+
+  xlab("Other Salaries") + 
+  ylab("Total Compensation ($)")
+
+ggplot(emp_sal_data.df, aes(x = Retirement, y = log(Total.Compensation))) +
+  geom_point(color = "tomato2", alpha = 0.4)+
+  xlab("Retirement") + 
+  ylab("Total Compensation ($)")
+
+ggplot(emp_sal_data.df, aes(x = Health.and.Dental, y = log(Total.Compensation))) +
+  geom_point(color = "tomato2", alpha = 0.4)+
+  xlab("Health and Dental") + 
+  ylab("Total Compensation ($)")
+
+ggplot(emp_sal_data.df, aes(x = Other.Benefits, y = log(Total.Compensation))) +
+  geom_point(color = "tomato2", alpha = 0.4)+
+  xlab("Other Benefits") + 
+  ylab("Total Compensation ($)")
+
+```
+
+
+### 4. Total Compensation V/S Year
+
+The graphs in 4 & 5 show us why we needed to remove the category "General City Responsibilities".
+We cannot see any data from "General City Responsibilities" in graph 4 in any year. This  indicated that we needed to dig deeper to analyze what was going wrong. In graph 5,
+we can see that there is a big dip in the average salaries throughout the years for this
+category. We can safely assume that there is data missing from this category and for a more accurate
+model, we decided to remove the category.
+
+```{r Average Total Compensation (in Million)}
+
+options(scipen=999)
+Comp_Year <- ggplot(Salary1.df, 
+           aes(x=Year, y=mean(Total.Compensation), fill=Organization.Group, 
+               width=0.5 )) +
+  geom_bar(stat="identity") + 
+  ggtitle("Year over Year Average Total Compensation") +
+   scale_y_continuous(
+        name = "Average Total Compensation (per Million $)",
+        labels = function(y) paste0(y / 1000000, "M")) +
+  theme_classic()
+
+Comp_Year
+```
+
+### 5. Year over Year Average Salary 
+
+
+```{r Year over Year Average Salary}
+
+ggplot(year.org, aes(x = Year, y = mean.salary, group = Organization.Group, 
+                     color = Organization.Group)) +
+  geom_line() +ggtitle("Year Over Year Average Salary") +
+  xlab("Year") +ylab("Average Salary Amount ($)")
+```
+
+### 6. Top 5 Departments with highest Total Compensation
+
+```{r Top 5 Departments with highest Total Compensation}
+
+top15_totalcomp <- Salary1.df %>% 
+arrange(desc(Total.Compensation)) %>% 
+slice_max( Total.Compensation, n = 15)
+
+top15_totalcomp
+
+# Barplot displaying Top 5 departments with highest total compensation
+ggplot(top15_totalcomp, aes(x=forcats::fct_rev(Department), y=Total.Compensation, width = 0.6 )) + 
+    geom_bar(stat = "identity", fill = "#0096FF") +
+  scale_x_discrete (
+    name = "Department"
+  ) +
+  scale_y_continuous(
+  name = "Total Compensation (per thousand $)",
+  labels = function(y) paste0(y / 1000, "k")) +
+  ggtitle("Top 5 Departments w.r.t Total Compensation ")
+
+```
+
+### 7. Top 5 Organization Group with highest Total Compensation
+
+```{r Top 5 Organization Group with highest Total Compensation}
+
+top350_totalcomp <- Salary1.df %>% 
+arrange(desc(Total.Compensation)) %>% 
+slice_max( Total.Compensation, n = 350)
+
+top350_totalcomp
+
+# Barplot Top 5 Organization Group with highest total compensation
+ggplot(top350_totalcomp, aes(fct_rev(fct_reorder(Organization.Group,Total.Compensation)), Total.Compensation, width=0.3  )) + 
+  geom_bar(stat = "identity", fill = "#FDDA0D") + 
+  scale_x_discrete (
+    name = "Organization Group"
+  ) +
+  scale_y_continuous(
+  name = "Total Compensation (per Million $)",
+  labels = function(y) paste0(y / 1000000, "M")) +
+  ggtitle("Top 5 Organization Groups w.r.t Total Compensation")+
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+
+```
+
+### 8. Total Salaries by Year, Top 5 Departments, and  Organization Group
+
+```{r Total Salaries by Year, Top 5 Departments, and  Organization Group}
+
+
+ggplot(data=top15_totalcomp, 
+       aes(x=factor(Year), y=Total.Compensation, 
+           group=Organization.Group,
+           color=Organization.Group)) + 
+               geom_line() + 
+               geom_point() +
+               scale_x_discrete("Year") +
+               scale_y_continuous(
+                  name = "Total Compensation (per thousand $)",
+                  labels = function(y) paste0(y / 1000, "K")) + 
+          rotate_x_text() +
+          ggtitle("Total Compensation by Year, Top 5 Departments, and  Organization Group") +
+          facet_wrap(.~Department )
+```
+
+### 9. Yearly distribution of count of records w.r.t. Top 5 Organization Group
+
+```{r Yearly distribution of count of records w.r.t. Top 5 Organization Group}
+
+ggplot(data = top350_totalcomp, aes(x = Year, fill = Organization.Group)) +
+    geom_bar() +
+    scale_y_continuous(
+      name = "Number of Records"
+    ) +
+  ggtitle("Yearly distribution of count of records w.r.t. Top 5 Organization Group")
+
+
+```
+
+
+# Regression Models
+
+### Data Partition - 1 
+
+```{r Data partition}
+# Assigning 80% of data to training dataset and 20% of data to validation dataset.
+
+Salary.df <- Salary_data.df[, -c(1:4,9,13)]
+Salary_newSet.df <- Salary.df[, c(1, 8:10,12:14,16)]
+
+set.seed(42)
+
+training_dataset.index<- sample(c(1:nrow(Salary_newSet.df)), 
+                                round(0.8 *nrow(Salary_newSet.df),0))
+
+training_dataset.df<-Salary_newSet.df[training_dataset.index,]
+
+validation_dataset.df<-Salary_newSet.df[-training_dataset.index,]
+
+```
+
+### Multicollinear Model
+
+Because this R^2 value is too high, which is close to 1. Also, the Salaries and Retirement Health.and.Dental VIF value is greater than 10. So this model is multi-collinear, we can not run the linear regression for this model
+
+```{r build check multicollinear model}
+# Build the model
+Salary.lm <- lm(Total.Compensation ~ ., data = training_dataset.df)
+
+# Make predictions
+predictions <- Salary.lm %>% predict(validation_dataset.df)
+# Model performance
+data.frame(
+  RMSE = RMSE(predictions, validation_dataset.df$Total.Compensation),
+  R2 = R2(predictions, validation_dataset.df$Total.Compensation)
+)
+print("summary of this linear model")
+summary(Salary.lm)
+print("VIF")
+vif(Salary.lm)
+
+```
+
+### Data Partition - 2
+
+```{r Data Partition}
+
+quant <- quantile(Salary2.df$Total.Compensation, probs = seq(0, 1, .1))
+
+Salary2.df <- Salary2.df %>% mutate(Seniority = case_when(
+                                        Total.Compensation <= quant[4] ~ "Entry Level", 
+                                        Total.Compensation  >= quant[4] & Total.Compensation  <= quant[6] ~ "Lower", 
+                                        Total.Compensation  >= quant[6] & Total.Compensation  <= quant[8] ~ "Middle", 
+                                        Total.Compensation  >= quant[8] & Total.Compensation  <= quant[10] ~ "Upper", 
+                                        Total.Compensation  >= quant[10] ~ "Executive"))
+
+set.seed(80)
+train.index <- createDataPartition(Salary2.df$Total.Compensation, p = 0.8, list = FALSE)
+train.df <- Salary2.df[train.index, ]
+test.df <- Salary2.df[-train.index, ]
+
+```
+
+### Regression Analysis 1 Organization Group 
+
+```{r Regression Analysis 1}
+
+
+options(scipen = 999)
+lm1 <- lm(Total.Compensation ~ Seniority, data = train.df)
+summary(lm1)
+
+lm2 <- lm(Total.Compensation ~ Seniority + Organization.Group, data = train.df)
+summary(lm2)
+
+lm3 <- lm(Total.Compensation ~ Seniority + Organization.Group + Seniority*Organization.Group, data = train.df)
+summary(lm3)
+
+par(mfrow = c(2,2))
+plot(lm3)
+
+lm_predict <- predict(lm3, test.df)
+accuracy(lm_predict, test.df$Total.Compensation)
+
+```
+
+### Regression Analysis 2 Job Family
+
+```{r Regression Analysis 2}
+
+lm4 <- lm(Total.Compensation ~ Seniority + Job.Family, data = train.df)
+summary(lm4)
+
+lm5 <- lm(Total.Compensation ~ Seniority + Job.Family + Seniority*Job.Family, data = train.df)
+summary(lm5)
+
+par(mfrow = c(2,2))
+plot(lm5)
+
+lm_predict2 <- predict(lm5, test.df)
+accuracy(lm_predict2, test.df$Total.Compensation)
+
+```
+
+
+# Appendix
+
+### Total Benefits V/S Year
+
+```{r Total Benefits V/S Year Stacked Bar Chart}
+
+e <-ggplot(data=Salary1.df, 
+           aes(x=Year, y=mean(Total.Benefits), fill=Organization.Group)) +
+  ggtitle("Year over Year Average Total Benefits") +
+  xlab("Year") +
+  ylab("Average Total Benfits Amount ($)") +
+  geom_bar(stat="identity", width=0.5) + 
+  theme_classic()
+
+e
+```
+
+### Top 5 Departments with highest Total Salary
+
+```{r Top 5 Departments with highest Total Salary}
+
+top20_totalsal <- Salary1.df %>% 
+arrange(desc(Total.Salary)) %>% 
+slice_max( Total.Salary, n = 20)
+
+top20_totalsal
+
+# Barplot for displaying Top 5 departments with highest Total salary
+ggplot(top20_totalsal, aes(x=forcats::fct_rev(Department), y= Total.Salary, width=0.5 )) + 
+  geom_bar(stat = "identity", fill = "#FFA500") +
+  scale_x_discrete (
+    name = "Department"
+  ) +
+  scale_y_continuous(
+        name = "Total Salary (per thousand $)",
+        labels = function(y) paste0(y / 1000, "k")) +
+   ggtitle("Top 5 Departments w.r.t Total Salary ")
+
+```
+
+### Top 5 Organization Group with highest Total Salary
+
+```{r Top 5 Organization Group with highest Total Salary}
+
+top350_totalsal <- Salary1.df %>% 
+arrange(desc(Total.Salary)) %>% 
+slice_max( Total.Salary, n = 350)
+
+top350_totalsal
+
+#Barplot displaying Top 5 Organization Group with highest Total Salary
+
+ggplot(top350_totalsal, aes(fct_rev(fct_reorder(Organization.Group,Total.Salary)), Total.Salary, width=0.4 )) + 
+  geom_bar(stat = "identity", fill = "#7cedff") +
+  scale_x_discrete (name = "Organization Group") +
+  scale_y_continuous(
+        name = "Total Salary (per thousand $)",
+        labels = function(y) paste0(y / 1000, "k")) +
+   ggtitle("Top 5 Organization Group w.r.t Total Salary ")+ 
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+```
+
+### Top 4 Departments with highest Total Benefits
+
+```{r Top 4 Departments with highest Total Benefits}
+
+top15_totalbenefits <- Salary1.df %>% 
+arrange(desc(Total.Benefits)) %>% 
+slice_max( Total.Benefits, n = 15)
+
+top15_totalbenefits
+
+# Barplot for displaying Top 4 departments with highest total compensation
+
+ggplot(top15_totalbenefits, aes(x=forcats::fct_rev(Department), y=Total.Benefits, width = 0.6 )) + 
+    geom_bar(stat = "identity", fill = "#0096FF") + scale_x_discrete (name = "Department")+ scale_y_continuous(name = "Total Benefits (per thousand $)",
+  labels = function(y) paste0(y / 1000, "k")) +
+  ggtitle("Top 4 Departments w.r.t Total Benefits ") + theme(axis.text.x=element_text(angle=45, hjust=1))
+
+```
+
+### Top 2 Organization Group with highest Total Benefits
+
+```{r Top 2 Organization Group with highest Total Benefits}
+
+# Barplot for displaying Top 2 Organization Group with highest total benefit
+
+ggplot(top15_totalbenefits, aes(x=Organization.Group, y=Total.Benefits, width=0.3  )) + 
+  geom_bar(stat = "identity", fill = "#FDDA0D") +
+  scale_x_discrete (
+    name = "Organization Group"
+  ) +
+  scale_y_continuous(
+  name = "Total Benefits (per thousand $)",
+  labels = function(y) paste0(y / 1000, "k")) +
+  ggtitle("Top 2 Organization Groups w.r.t Total Benefits ")
+
+```
+
+### Top 10 Total Compensation by Year, Department, and  Organization Group
+
+```{r Top 10 Total Compensation by Year, Department, and  Organization Group}
+
+top10_totalcomp <- Salary1.df %>% 
+arrange(desc(Total.Compensation)) %>% 
+slice_max( Total.Compensation, n = 10)
+
+top10_totalcomp
+
+ggplot(data=top10_totalcomp, 
+       aes(x=factor(Year), y=Total.Compensation, 
+           group=Organization.Group,
+           color=Organization.Group)) + 
+               geom_line() + 
+               geom_point() +
+               scale_x_discrete("Year") +
+               scale_y_continuous(
+                  name = "Total Compensation (per thousand $)",
+                  labels = function(y) paste0(y / 1000, "K")) + 
+          ggtitle("Top 10 Total Compensation by Year, Department, and  Organization Group") +
+           facet_grid(.~Department ) 
+```
+
+### Year over Year Average Benefits 
+
+```{r Year over Year Average Benefits}
+ggplot(year2.org, aes(x = Year, y = mean.benefit, group = Organization.Group, 
+                      color = Organization.Group)) +
+  geom_line() + ggtitle("Year Over Year Average Benefits") +
+  xlab("Year") + ylab("Benefit Amount ($)")
+```
+
+### Overtime V/S Year
+
+```{r Overtime V/S Year Stacked Bar Chart}
+g <-ggplot(data=Salary1.df, 
+           aes(x=Year, y=mean(Overtime), fill=Organization.Group)) +
+  ggtitle("Year over Year Average Overtime Salary") +
+  xlab("Year") +
+  ylab("Average Overtime Salary ($)") +
+  geom_bar(stat="identity", width=0.5) + 
+  theme_classic()
+
+g
+
+```
+
+### Retirement V/S Year
+
+```{r Retirement V/S Year Stacked Bar Chart}
+i <-ggplot(data=Salary1.df, 
+           aes(x=Year, y=mean(Retirement), fill=Organization.Group)) +
+  ggtitle("Year over Year Average Retirement Benefits") +
+  xlab("Year") +
+  ylab("Average Retirement Benefit Amount ($)") +
+  geom_bar(stat="identity", width=0.5) + 
+  theme_classic()
+
+i
+```
+
+### Yearly distribution of count of records w.r.t. Top 5 Departments
+
+```{r Yearly distribution of count of records w.r.t. Top 5 Departments}
+
+ggplot(data = top15_totalcomp, aes(x = Year, fill = Department)) +
+    geom_bar() +
+    scale_y_continuous(
+      name = "Number of Records"
+    ) +
+  ggtitle("Yearly distribution of count of records w.r.t. Top 5 Departments")
+
+
+```
+
+### Stepwise Regression using leaps Package
+
+```{r Stepwise regression using leaps package}
+
+Salary.lm <- lm(Total.Compensation ~ ., data = training_dataset.df)
+Salary_stepwiseReg <-  regsubsets(Total.Compensation ~ ., data = training_dataset.df, 
+                                 nbest = 1, nvmax = dim(training_dataset.df)[2], 
+                                 method = "seqrep")
+
+summary(Salary_stepwiseReg)$which
+
+print("Adjusted R-squared Values:")
+summary(Salary_stepwiseReg)$adjr2
+
+print("Mallow's Cp Values:")
+summary(Salary_stepwiseReg)$cp
+
+```
+
+### Backward selection model using stepAIC() function
+
+```{r Backward selection model using stepAIC() function}
+
+
+Salary.back.lm <- lm(Total.Compensation ~ ., data = training_dataset.df)
+
+back.Salary.plane <- stepAIC(Salary.back.lm, direction = "backward")
+
+Salary.back.lm.pred <- predict(Salary.back.lm, validation_dataset.df)
+
+print("Backward Step AIC Model")
+accuracy(Salary.back.lm.pred, validation_dataset.df$Total.Compensation)
+
+```
+
+### Forward selection model using step AIC() function
+
+```{r Forward selection model using step AIC() function}
+Salary.lm <- lm(Total.Compensation ~ ., data = training_dataset.df)
+Salary.lm.null <- lm(Total.Compensation~1, data = training_dataset.df)
+
+# use step() to run forward regression.
+Salary.lm.fselect <- step(Salary.lm.null, scope=list(lower=Salary.lm.null, upper=Salary.lm), direction = "forward")
+summary(Salary.lm.fselect)  # Which variables were added?
+Salary.lm.fselect.pred <- predict(Salary.lm.fselect, validation_dataset.df)
+print("Forward Step AIC Model")
+accuracy(Salary.lm.fselect.pred, validation_dataset.df$Total.Compensation)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
